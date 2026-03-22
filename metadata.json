@@ -1,0 +1,9 @@
+{
+  "name": "hia",
+  "description": "A vibrant social networking application for connecting with people nearby, featuring a multi-step onboarding process and real-time interactions.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
