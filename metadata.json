@@ -1,5 +1,7 @@
 {
   "name": "hia - Modern Swipe Browsing",
   "description": "A modern, swipe-driven location-based browsing app with premium dark theme and gold accents.",
-  "requestFramePermissions": ["geolocation"]
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }
