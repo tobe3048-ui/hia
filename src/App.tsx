@@ -26,7 +26,6 @@ interface User {
   lastOnline?: string;
   distance?: string;
   headline?: string;
-  bio?: string;
   ethnicity?: string;
   height?: string;
   weight?: string;
@@ -57,7 +56,6 @@ const useAuth = () => useContext(AuthContext);
 
 const STATS_OPTIONS = [
   { id: 'lookingFor', label: 'Looking for', icon: Search, choices: ['Hookups', 'Friends', 'Relationship', 'Right Now', 'Chat'] },
-  { id: 'age', label: 'Age', icon: Clock, choices: Array.from({ length: 82 }, (_, i) => (i + 18).toString()) },
   { id: 'ethnicity', label: 'Ethnicity', icon: Globe, choices: ['Asian', 'Black', 'Latino', 'Middle Eastern', 'Mixed', 'Other', 'South Asian', 'White'] },
   { id: 'height', label: 'Height', icon: Ruler, choices: ['4\' 0"', '4\' 1"', '4\' 2"', '4\' 3"', '4\' 4"', '4\' 5"', '4\' 6"', '4\' 7"', '4\' 8"', '4\' 9"', '4\' 10"', '4\' 11"', '5\' 0"', '5\' 1"', '5\' 2"', '5\' 3"', '5\' 4"', '5\' 5"', '5\' 6"', '5\' 7"', '5\' 8"', '5\' 9"', '5\' 10"', '5\' 11"', '6\' 0"', '6\' 1"', '6\' 2"', '6\' 3"', '6\' 4"', '6\' 5"', '6\' 6"', '6\' 7"', '6\' 8"', '6\' 9"', '6\' 10"', '6\' 11"', '7\' 0"'] },
   { id: 'weight', label: 'Weight', icon: WeightIcon, choices: Array.from({ length: 201 }, (_, i) => (i + 100).toString() + ' lb') },
@@ -448,63 +446,7 @@ const RegisterFlow = () => {
           )}
 
           {step === 2 && (
-            <motion.div key="s2" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="space-y-6">
-              <div className="flex items-center justify-between px-2">
-                <h2 className="text-xl font-bold uppercase tracking-widest text-zinc-500">Attributes</h2>
-              </div>
-
-              <div className="bg-zinc-900/40 rounded-3xl overflow-hidden border border-zinc-800/50">
-                {STATS_OPTIONS.map((opt, idx) => (
-                  <button
-                    key={opt.id}
-                    onClick={() => {
-                      setActiveSelection(opt.id);
-                      setTempValue((formData as any)[opt.id] || '');
-                    }}
-                    className={cn(
-                      "w-full p-5 flex items-center justify-between hover:bg-white/5 transition-colors text-left",
-                      idx !== STATS_OPTIONS.length - 1 && "border-b border-zinc-800/50"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <opt.icon size={20} className="text-zinc-500" />
-                      <span className="text-lg font-medium text-white">{opt.label}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-zinc-400 font-medium">
-                        {(formData as any)[opt.id] || '--'}
-                      </span>
-                      <ChevronLeft size={18} className="rotate-180 text-zinc-700" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex gap-4 pt-8">
-                <Button variant="secondary" onClick={back}>Back</Button>
-                <Button onClick={next}>Next</Button>
-              </div>
-
-              <AnimatePresence>
-                {activeSelection && (
-                  <Picker
-                    title={STATS_OPTIONS.find(o => o.id === activeSelection)?.label || ''}
-                    options={STATS_OPTIONS.find(o => o.id === activeSelection)?.choices || []}
-                    value={tempValue}
-                    onChange={setTempValue}
-                    onClose={() => setActiveSelection(null)}
-                    onSave={() => {
-                      setFormData({ ...formData, [activeSelection]: tempValue });
-                      setActiveSelection(null);
-                    }}
-                  />
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-
-          {step === 3 && (
-            <motion.div key="s3" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="space-y-8">
+            <motion.div key="s2" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="space-y-8">
               <div className="text-center">
                 <h2 className="text-3xl font-bold mb-2">What is your date of birth?</h2>
                 <p className="text-zinc-500 text-sm leading-relaxed">You must be 18+ to use this service. Your date of birth is not stored in our database, just your age.</p>
@@ -573,6 +515,62 @@ const RegisterFlow = () => {
                 <Button variant="secondary" onClick={back}>Back</Button>
                 <Button onClick={next} disabled={!formData.dob.mm || !formData.dob.dd || !formData.dob.yyyy}>Next</Button>
               </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
+            <motion.div key="s3" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }} className="space-y-6">
+              <div className="flex items-center justify-between px-2">
+                <h2 className="text-xl font-bold uppercase tracking-widest text-zinc-500">Attributes</h2>
+              </div>
+
+              <div className="bg-zinc-900/40 rounded-3xl overflow-hidden border border-zinc-800/50">
+                {STATS_OPTIONS.map((opt, idx) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => {
+                      setActiveSelection(opt.id);
+                      setTempValue((formData as any)[opt.id] || '');
+                    }}
+                    className={cn(
+                      "w-full p-5 flex items-center justify-between hover:bg-white/5 transition-colors text-left",
+                      idx !== STATS_OPTIONS.length - 1 && "border-b border-zinc-800/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <opt.icon size={20} className="text-zinc-500" />
+                      <span className="text-lg font-medium text-white">{opt.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-400 font-medium">
+                        {(formData as any)[opt.id] || '--'}
+                      </span>
+                      <ChevronLeft size={18} className="rotate-180 text-zinc-700" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-4 pt-8">
+                <Button variant="secondary" onClick={back}>Back</Button>
+                <Button onClick={next}>Next</Button>
+              </div>
+
+              <AnimatePresence>
+                {activeSelection && (
+                  <Picker
+                    title={STATS_OPTIONS.find(o => o.id === activeSelection)?.label || ''}
+                    options={STATS_OPTIONS.find(o => o.id === activeSelection)?.choices || []}
+                    value={tempValue}
+                    onChange={setTempValue}
+                    onClose={() => setActiveSelection(null)}
+                    onSave={() => {
+                      setFormData({ ...formData, [activeSelection]: tempValue });
+                      setActiveSelection(null);
+                    }}
+                  />
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
@@ -820,7 +818,6 @@ const ProfilePage = () => {
           lastOnline: data.lastOnline || '11 minutes ago',
           distance: data.distance || '581 mi away',
           headline: data.headline || 'Just Looking',
-          bio: data.bio || "I love nothing more then to chill and relax when I'm not working.",
           ethnicity: data.ethnicity || 'White',
           height: data.height || '5 ft, 11 in',
           weight: data.weight || '160 lb',
@@ -906,10 +903,9 @@ const ProfilePage = () => {
             </div>
           </div>
 
-          {/* Headline & Bio */}
           <div className="space-y-1">
             <h2 className="text-lg font-bold text-white leading-tight">
-              {profile.headline} <span className="font-normal text-zinc-500 mx-1">|</span> {profile.bio}
+              {profile.headline}
             </h2>
           </div>
 

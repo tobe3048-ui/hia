@@ -5,7 +5,6 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   displayName: text("display_name").notNull(),
   age: integer("age"),
-  bio: text("bio"),
   lookingFor: varchar("looking_for", { length: 100 }),
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
