@@ -1377,7 +1377,7 @@ const ConversationsList = ({ onSelectChat, activeChatId }: { onSelectChat?: (id:
       try {
         const data = await api.get('/api/conversations');
         setConversations(data);
-        const unread = data.filter((c: any) => c.unread).length;
+        const unread = data.filter((c: any) => c.unreadCount > 0).length;
         setUnreadCount(unread);
       } catch (err) {
         console.error('Failed to fetch conversations:', err);
@@ -1386,7 +1386,20 @@ const ConversationsList = ({ onSelectChat, activeChatId }: { onSelectChat?: (id:
       }
     };
     fetchConversations();
-  }, [user]);
+    
+    // Poll for new messages every 10 seconds
+    const interval = setInterval(fetchConversations, 10000);
+    return () => clearInterval(interval);
+  }, [user, setUnreadCount]);
+
+  // Clear unread badge locally when a chat becomes active
+  useEffect(() => {
+    if (activeChatId) {
+      setConversations(prev => prev.map(c => 
+        c.otherUser.id.toString() === activeChatId.toString() ? { ...c, unreadCount: 0 } : c
+      ));
+    }
+  }, [activeChatId]);
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -1561,7 +1574,7 @@ const PhotoAlbumModal = ({ onClose, onUnlock, selectedPhotos, setSelectedPhotos 
 };
 
 const ChatWindow = ({ otherUserId, onBack, isSidebar }: { otherUserId: string, onBack?: () => void, isSidebar?: boolean }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, setUnreadCount } = useAuth();
   const [otherUser, setOtherUser] = useState<User | null>(null);
   const [conversation, setConversation] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -1588,6 +1601,13 @@ const ChatWindow = ({ otherUserId, onBack, isSidebar }: { otherUserId: string, o
         setMessages(msgData);
 
         await api.post(`/api/messages/read/${convData.id}`, {});
+        
+        // Refresh global unread count after reading
+        try {
+          const unreadData = await api.get('/api/conversations/unread-count');
+          setUnreadCount(unreadData.unreadCount || 0);
+        } catch (e) {}
+
       } catch (err) {
         console.error('Failed to initialize chat:', err);
       } finally {
@@ -1595,7 +1615,35 @@ const ChatWindow = ({ otherUserId, onBack, isSidebar }: { otherUserId: string, o
       }
     };
     initChat();
-  }, [user?.id, otherUserId]);
+  }, [user?.id, otherUserId, setUnreadCount]);
+
+  // Poll for new messages
+  useEffect(() => {
+    if (!conversation?.id || !user?.id) return;
+    
+    const pollMessages = async () => {
+      try {
+        const msgData = await api.get(`/api/messages/${conversation.id}`);
+        
+        // Check if there are new messages
+        if (msgData.length > messages.length) {
+          setMessages(msgData);
+          
+          // Mark as read
+          await api.post(`/api/messages/read/${conversation.id}`, {});
+          
+          // Refresh global unread count
+          const unreadData = await api.get('/api/conversations/unread-count');
+          setUnreadCount(unreadData.unreadCount || 0);
+        }
+      } catch (err) {
+        // Ignore polling errors
+      }
+    };
+
+    const intervalId = setInterval(pollMessages, 5000);
+    return () => clearInterval(intervalId);
+  }, [conversation?.id, user?.id, messages.length, setUnreadCount]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -2402,16 +2450,16 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="h-[100dvh] w-full bg-[#050505] text-white font-display overflow-hidden flex">
       {/* Desktop Left Sidebar (Navigation) */}
-      <aside className="hidden lg:flex flex-col w-20 border-r border-zinc-900 bg-black py-8 items-center shrink-0">
+      <aside className="hidden lg:flex flex-col w-64 border-r border-zinc-900 bg-black py-8 items-start shrink-0">
         <div 
           onClick={() => navigate('/home')}
-          className="text-2xl font-black tracking-tighter bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-600 text-transparent bg-clip-text italic mb-12 cursor-pointer hover:scale-110 transition-transform"
+          className="text-4xl font-black tracking-tighter bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-600 text-transparent bg-clip-text italic mb-12 cursor-pointer hover:scale-105 transition-transform px-8"
           title="hia Home"
         >
-          h
+          hia
         </div>
         
-        <nav className="space-y-4 flex-1 w-full px-2">
+        <nav className="space-y-2 flex-1 w-full px-4">
           {[
             { id: 'home', label: 'Nearby', icon: MapPin, path: '/home' },
             { id: 'filters', label: 'Filters', icon: SlidersHorizontal, action: () => {} },
@@ -2426,15 +2474,16 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               title={item.label}
               disabled={item.loading}
               className={cn(
-                "w-full aspect-square flex items-center justify-center rounded-2xl transition-all group relative",
+                "w-full h-14 flex items-center justify-start px-4 gap-4 rounded-2xl transition-all group relative font-bold text-sm",
                 item.path && location.pathname === item.path ? "bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.3)]" : "text-zinc-500 hover:bg-zinc-900 hover:text-white",
                 item.color && !item.path && item.color
               )}
             >
               <item.icon size={24} fill={item.path && location.pathname === item.path ? "currentColor" : "none"} className={cn(item.loading && "animate-pulse")} />
+              <span>{item.label}</span>
               {item.badge > 0 && (
                 <span className={cn(
-                  "absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-[9px] font-black border-2 border-black",
+                  "ml-auto px-2 py-0.5 rounded-full text-[10px] font-black",
                   item.path && location.pathname === item.path ? "bg-black text-yellow-500" : "bg-yellow-500 text-black"
                 )}>
                   {item.badge}
@@ -2445,13 +2494,17 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         </nav>
 
         {user && (
-          <div className="pt-6 border-t border-zinc-900 w-full flex justify-center">
-            <div className="w-10 h-10 rounded-xl bg-zinc-900 overflow-hidden border border-zinc-800 cursor-pointer hover:border-yellow-500 transition-colors" onClick={() => navigate(`/profile/${user.id}`)}>
+          <div className="pt-6 border-t border-zinc-900 w-full px-6 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-zinc-900 overflow-hidden border border-zinc-800 cursor-pointer hover:border-yellow-500 transition-colors shrink-0" onClick={() => navigate(`/profile/${user.id}`)}>
               {user.profilePhotoThumbUrl || user.photoUrl ? (
-                <img src={user.profilePhotoThumbUrl || user.photoUrl} alt="" className="w-full h-full object-cover" />
+                <img src={user.profilePhotoThumbUrl || user.photoUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-zinc-700 font-bold italic text-xs">hia</div>
               )}
+            </div>
+            <div className="flex flex-col min-w-0 flex-1 cursor-pointer" onClick={() => navigate(`/profile/${user.id}`)}>
+              <span className="text-sm font-bold text-white truncate">{user.displayName || 'User'}</span>
+              <span className="text-xs text-zinc-500 truncate">View Profile</span>
             </div>
           </div>
         )}
@@ -2470,7 +2523,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       </main>
 
       {/* Desktop Right Sidebar (Messenger) */}
-      <aside className="hidden xl:flex flex-col w-80 border-l border-zinc-900 bg-black shrink-0">
+      <aside className="hidden xl:flex flex-col w-96 border-l border-zinc-900 bg-black shrink-0">
         {activeDesktopChat ? (
           <div className="flex-1 flex flex-col">
             <ChatWindow 

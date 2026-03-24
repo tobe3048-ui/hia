@@ -499,6 +499,48 @@ async function startServer() {
     }
   });
 
+  apiRouter.get("/conversations/unread-count", authenticateToken, async (req: any, res) => {
+    try {
+      const currentUserId = req.user.id;
+      
+      // Get all conversations for the user
+      const userConversations = await db.select({ id: conversations.id })
+        .from(conversations)
+        .where(or(
+          eq(conversations.user1Id, currentUserId),
+          eq(conversations.user2Id, currentUserId)
+        ));
+
+      if (userConversations.length === 0) {
+        return res.json({ unreadCount: 0 });
+      }
+
+      const convIds = userConversations.map(c => c.id);
+
+      // Count conversations that have at least one unread message from the other user
+      let unreadConversationsCount = 0;
+      
+      for (const convId of convIds) {
+        const unreadMsg = await db.select({ id: messages.id })
+          .from(messages)
+          .where(and(
+            eq(messages.conversationId, convId),
+            eq(messages.isRead, false),
+            ne(messages.senderId, currentUserId)
+          ))
+          .limit(1);
+          
+        if (unreadMsg.length > 0) {
+          unreadConversationsCount++;
+        }
+      }
+
+      res.json({ unreadCount: unreadConversationsCount });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to fetch unread count", details: error.message });
+    }
+  });
+
   apiRouter.get("/conversations/user/:otherUserId", authenticateToken, async (req: any, res) => {
     try {
       const otherUserId = parseInt(req.params.otherUserId);
