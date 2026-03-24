@@ -5,7 +5,7 @@ const handleResponse = async (response: Response) => {
     let errorMsg = 'API request failed';
     try {
       const error = await response.json();
-      errorMsg = error.details ? `${error.error}: ${error.details}` : (error.error || errorMsg);
+      errorMsg = error.error || errorMsg;
     } catch (e) {
       errorMsg = `${response.status} ${response.statusText}`;
     }
@@ -24,14 +24,13 @@ export const api = {
     return handleResponse(response);
   },
   post: async (url: string, data: any) => {
-    const isFormData = data instanceof FormData;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${getAuthToken()}`,
       },
-      body: isFormData ? data : JSON.stringify(data),
+      body: JSON.stringify(data),
     });
     return handleResponse(response);
   },

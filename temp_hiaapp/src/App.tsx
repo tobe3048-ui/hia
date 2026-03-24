@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { api } from './lib/api';
-import PrivatePhoto from './components/PrivatePhoto';
 
 // --- Types & Context ---
 
@@ -37,9 +36,6 @@ interface User {
   profilePhotoThumbUrl?: string;
   position?: string;
   showAge?: boolean;
-  showDistance?: boolean;
-  showNeighborhood?: boolean;
-  neighborhood?: string;
   isOnline?: boolean;
   lastOnline?: string;
   lastSeen?: string | Date;
@@ -53,7 +49,7 @@ interface User {
   bodyType?: string;
   relationshipStatus?: string;
   role?: string;
-  photos?: { id: number; photoData: string; thumbData?: string; isLocked: boolean }[];
+  photos?: { id: number; photoData: string; isLocked: boolean }[];
   isUnlocked?: boolean;
   latitude?: number;
   longitude?: number;
@@ -61,7 +57,6 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  setUser: (user: User | null) => void;
   loading: boolean;
   locationError: string | null;
   updateLocation: () => Promise<void>;
@@ -75,7 +70,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({ 
   user: null, 
-  setUser: () => {},
   loading: true,
   locationError: null,
   updateLocation: async () => {},
@@ -397,9 +391,6 @@ const RegisterFlow = () => {
     confirmPassword: '',
     dob: { mm: '', dd: '', yyyy: '' },
     showAge: true,
-    showDistance: true,
-    showNeighborhood: true,
-    neighborhood: '',
     height: '',
     weight: '',
     bodyType: '',
@@ -472,9 +463,6 @@ const RegisterFlow = () => {
         displayName: formData.email.split('@')[0],
         age: age,
         showAge: formData.showAge,
-        showDistance: formData.showDistance,
-        showNeighborhood: formData.showNeighborhood,
-        neighborhood: formData.neighborhood,
         height: formData.height,
         weight: formData.weight,
         bodyType: formData.bodyType,
@@ -794,7 +782,7 @@ const RegisterFlow = () => {
 };
 
 const EditProfilePage = () => {
-  const { user, setUser, loading } = useAuth();
+  const { user, loading } = useAuth();
   const [formData, setFormData] = useState<any>(null);
   const [activeSelection, setActiveSelection] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<string>('');
@@ -811,9 +799,8 @@ const EditProfilePage = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updatedUser = await api.post('/api/users/me', formData);
-      setUser({ ...user, ...updatedUser });
-      navigate(`/profile/${updatedUser.id || user?.id}`);
+      await api.post('/api/users/me', formData);
+      navigate(`/profile/${user?.id}`);
     } catch (err) {
       console.error('Failed to save profile:', err);
       alert('Failed to save profile');
@@ -822,7 +809,7 @@ const EditProfilePage = () => {
     }
   };
 
-  const handlePhotoUpload = async (file: File, isPrimary: boolean = false, isLocked: boolean = false) => {
+  const handlePhotoUpload = async (file: File, isPrimary: boolean = false) => {
     setUploading(true);
     try {
       const uploadData = new FormData();
@@ -835,22 +822,22 @@ const EditProfilePage = () => {
       } else {
         const newPhoto = await api.post('/api/photos', {
           photoData: res.url,
-          thumbData: res.thumbUrl,
-          isLocked: isLocked,
+          isLocked: false,
           displayOrder: (formData.photos?.length || 0) + 1
         });
         setFormData({ ...formData, photos: [...(formData.photos || []), newPhoto] });
       }
     } catch (err) {
       console.error('Failed to upload photo:', err);
-      // alert('Failed to upload photo');
+      alert('Failed to upload photo');
     } finally {
       setUploading(false);
     }
   };
 
   const handlePhotoDelete = async (photoId: number | 'primary') => {
-    // Removed confirm as it might be blocked in iframe
+    if (!confirm('Are you sure you want to delete this photo?')) return;
+    
     try {
       if (photoId === 'primary') {
         await api.delete('/api/users/me/profile-photo');
@@ -861,7 +848,7 @@ const EditProfilePage = () => {
       }
     } catch (err) {
       console.error('Failed to delete photo:', err);
-      // alert('Failed to delete photo');
+      alert('Failed to delete photo');
     }
   };
 
@@ -882,13 +869,11 @@ const EditProfilePage = () => {
           <>
             <img src={url} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             <button 
-              type="button"
               onClick={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
                 if (photoId) handlePhotoDelete(photoId);
               }}
-              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
+              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <X size={14} />
             </button>
@@ -909,7 +894,7 @@ const EditProfilePage = () => {
           accept="image/*"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handlePhotoUpload(file, isPrimary, isPrivate);
+            if (file) handlePhotoUpload(file, isPrimary);
           }}
         />
 
@@ -925,10 +910,7 @@ const EditProfilePage = () => {
   return (
     <div className="h-full bg-[#0a0a0a] text-white font-display pb-20 overflow-y-auto scrollbar-hide">
       <header className="bg-zinc-900 px-4 py-3 flex items-center justify-between border-b border-white/10 sticky top-0 z-50">
-        <button onClick={() => navigate(-1)} className="text-white flex items-center gap-1 font-medium text-lg">
-          <ChevronLeft size={20} />
-          back
-        </button>
+        <button onClick={() => navigate(-1)} className="text-white font-medium text-lg">Cancel</button>
         <h1 className="text-lg font-bold">Edit Profile</h1>
         <button onClick={handleSave} disabled={saving} className="text-yellow-500 font-bold text-lg">
           {saving ? '...' : 'Save'}
@@ -936,27 +918,13 @@ const EditProfilePage = () => {
       </header>
 
       <main className="max-w-md mx-auto space-y-8 py-6">
-        {/* Display Name Section */}
-        <section className="bg-zinc-900 border-y border-white/10">
-          <div className="p-4 space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Display Name</label>
-            <input 
-              type="text"
-              value={formData.displayName || ''}
-              onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-              className="w-full bg-transparent text-lg font-bold focus:outline-none text-white border-b border-white/5 pb-2"
-              placeholder="Your display name"
-            />
-          </div>
-        </section>
-
         {/* Photo Gallery Section */}
         <section className="px-4 space-y-3">
           <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Photo Gallery</h3>
           <div className="grid grid-cols-4 gap-3">
-            <PhotoSlot isPrimary url={formData.profilePhotoThumbUrl || formData.profilePhotoUrl || formData.photoUrl} photoId="primary" />
+            <PhotoSlot isPrimary url={formData.profilePhotoUrl || formData.photoUrl} photoId="primary" />
             {formData.photos?.filter((p: any) => !p.isLocked).map((p: any) => (
-              <PhotoSlot key={p.id} url={p.thumbData || p.photoData} photoId={p.id} />
+              <PhotoSlot key={p.id} url={p.photoData} photoId={p.id} />
             ))}
             {Array.from({ length: Math.max(0, 3 - (formData.photos?.filter((p: any) => !p.isLocked).length || 0)) }).map((_, i) => (
               <PhotoSlot key={`empty-public-${i}`} />
@@ -970,7 +938,7 @@ const EditProfilePage = () => {
           <div className="bg-zinc-900 py-6 px-4">
             <div className="grid grid-cols-4 gap-3">
               {formData.photos?.filter((p: any) => p.isLocked).map((p: any) => (
-                <PhotoSlot key={p.id} url={p.thumbData || p.photoData} photoId={p.id} isPrivate />
+                <PhotoSlot key={p.id} url={p.photoData} photoId={p.id} isPrivate />
               ))}
               {Array.from({ length: Math.max(0, 4 - (formData.photos?.filter((p: any) => p.isLocked).length || 0)) }).map((_, i) => (
                 <PhotoSlot key={`empty-private-${i}`} isPrivate />
@@ -981,7 +949,7 @@ const EditProfilePage = () => {
 
         {/* Show Distance Section */}
         <section className="bg-zinc-900 border-y border-white/10">
-          <div className="p-4 flex items-center justify-between border-b border-white/5">
+          <div className="p-4 flex items-center justify-between">
             <div>
               <p className="text-lg font-bold">Show distance</p>
               <p className="text-zinc-500 text-sm">Show distance on your profile</p>
@@ -995,52 +963,6 @@ const EditProfilePage = () => {
                 className="w-6 h-6 bg-white rounded-full shadow-md" 
               />
             </div>
-          </div>
-
-          <div className="p-4 flex items-center justify-between border-b border-white/5">
-            <div>
-              <p className="text-lg font-bold">Show age</p>
-              <p className="text-zinc-500 text-sm">Show age on your profile</p>
-            </div>
-            <div 
-              onClick={() => setFormData({...formData, showAge: !formData.showAge})}
-              className={cn("w-14 h-8 rounded-full relative cursor-pointer transition-colors p-1", formData.showAge ? "bg-yellow-500" : "bg-zinc-800")}
-            >
-              <motion.div 
-                animate={{ x: formData.showAge ? 24 : 0 }} 
-                className="w-6 h-6 bg-white rounded-full shadow-md" 
-              />
-            </div>
-          </div>
-
-          <div className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-lg font-bold">Show neighborhood</p>
-              <p className="text-zinc-500 text-sm">Show neighborhood on your profile</p>
-            </div>
-            <div 
-              onClick={() => setFormData({...formData, showNeighborhood: !formData.showNeighborhood})}
-              className={cn("w-14 h-8 rounded-full relative cursor-pointer transition-colors p-1", formData.showNeighborhood ? "bg-yellow-500" : "bg-zinc-800")}
-            >
-              <motion.div 
-                animate={{ x: formData.showNeighborhood ? 24 : 0 }} 
-                className="w-6 h-6 bg-white rounded-full shadow-md" 
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Neighborhood Section */}
-        <section className="bg-zinc-900 border-y border-white/10">
-          <div className="p-4 space-y-2">
-            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Neighborhood</label>
-            <input 
-              type="text"
-              value={formData.neighborhood || ''}
-              onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
-              className="w-full bg-transparent text-lg font-bold focus:outline-none text-white border-b border-white/5 pb-2"
-              placeholder="e.g. West Hollywood"
-            />
           </div>
         </section>
 
@@ -1132,8 +1054,6 @@ const ProfilePage = () => {
           isOnline: isOnline(data.lastSeen),
           distance: data.distance || (user?.latitude ? 'Nearby' : 'Location Off'),
           headline: data.lookingFor || 'Just Looking',
-          displayName: data.displayName || data.username,
-          neighborhood: data.neighborhood || 'Nearby',
           ethnicity: data.ethnicity || 'White',
           height: data.height || '5 ft, 11 in',
           weight: data.weight || '160 lb',
@@ -1174,27 +1094,22 @@ const ProfilePage = () => {
   return (
     <div className="h-full bg-[#0a0a0a] text-white pb-24 font-display overflow-y-auto scrollbar-hide">
       {/* Header Overlay */}
-      <div className="sticky top-0 left-0 right-0 p-4 flex items-center justify-between z-50 bg-black/20 backdrop-blur-md border-b border-white/5">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-full text-white hover:bg-white/10 transition-colors">
+      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-black/20 backdrop-blur-sm text-white hover:bg-black/40 transition-colors">
           <ChevronLeft size={24} />
         </button>
-        <div className="absolute left-1/2 -translate-x-1/2">
-          <span className="text-2xl font-black tracking-tighter text-yellow-500">hia</span>
-        </div>
         <div className="flex items-center gap-2">
           {isOwnProfile && (
             <button 
               onClick={() => navigate('/edit-profile')}
-              className="px-4 py-1.5 rounded-full bg-yellow-500 text-black font-bold text-sm hover:bg-yellow-400 transition-colors"
+              className="px-4 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-white font-bold text-sm hover:bg-white/30 transition-colors"
             >
               Edit
             </button>
           )}
-          {!isOwnProfile && (
-            <button className="p-2 rounded-full text-white hover:bg-white/10 transition-colors">
-              <MoreHorizontal size={24} />
-            </button>
-          )}
+          <button className="p-2 rounded-full bg-black/20 backdrop-blur-sm text-white hover:bg-black/40 transition-colors">
+            <MoreHorizontal size={24} />
+          </button>
         </div>
       </div>
 
@@ -1216,11 +1131,27 @@ const ProfilePage = () => {
                 transition={{ duration: 0.2 }}
                 className="w-full h-full relative"
               >
-                <PrivatePhoto 
-                  imageUrl={currentPhoto?.photoData} 
-                  isUnlocked={!isLocked}
-                  alt="User profile"
+                <img 
+                  src={currentPhoto?.photoData} 
+                  alt="User profile" 
+                  className={cn(
+                    "w-full h-full object-cover transition-all duration-500",
+                    isLocked && "blur-2xl scale-110"
+                  )}
+                  referrerPolicy="no-referrer"
                 />
+                
+                {isLocked && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <Lock size={48} className="text-white mb-4 opacity-80" />
+                    <p className="text-white font-bold text-center px-8 text-lg drop-shadow-lg">
+                      Private Photo
+                    </p>
+                    <p className="text-white/70 text-sm text-center px-8 mt-2">
+                      Ask them to unlock their private gallery
+                    </p>
+                  </div>
+                )}
               </motion.div>
             </AnimatePresence>
 
@@ -1271,89 +1202,44 @@ const ProfilePage = () => {
         </div>
 
         {/* Info Section */}
-        <div className="px-8 pt-6 space-y-6">
-          {/* Name and Neighborhood */}
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-white tracking-tight">
-              {profile.displayName}
-            </h1>
-            {profile.showNeighborhood && (
-              <p className="text-zinc-400 font-medium flex items-center gap-1">
-                <MapPin size={14} />
-                {profile.neighborhood}
-              </p>
-            )}
-          </div>
-
-          {/* Status and Stats Container */}
-          <div className="bg-zinc-900/50 rounded-3xl p-6 border border-white/5 space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 text-sm font-medium text-zinc-300">
-                <div className="flex items-center gap-1.5">
-                  <div className={cn(
-                    "w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]",
-                    profile.isOnline ? "bg-emerald-500" : "bg-amber-400"
-                  )} />
-                  <span>{profile.isOnline ? 'Online Now' : `Online ${profile.lastOnline}`}</span>
-                </div>
-                {profile.showDistance && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                    <span>{profile.distance}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-6">
-              {profile.showAge && (
-                <div className="flex flex-col">
-                  <span className="text-2xl font-bold text-white">{profile.age}</span>
-                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Age</span>
-                </div>
-              )}
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-white">{profile.position}</span>
-                  <ArrowUpRight size={20} className="text-yellow-500" />
-                </div>
-                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Position</span>
-              </div>
+        <div className="px-8 pt-6 space-y-5">
+          {/* Status Line */}
+          <div className="flex items-center gap-4 text-sm font-medium text-zinc-300">
+            <div className="flex items-center gap-1.5">
+              <div className={cn(
+                "w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+                profile.isOnline ? "bg-emerald-500" : "bg-amber-400"
+              )} />
+              <span>{profile.isOnline ? 'Online Now' : `Online ${profile.lastOnline}`}</span>
             </div>
           </div>
 
           {/* Headline */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Headline</h3>
-            <p className="text-lg font-medium text-zinc-200 leading-relaxed italic">
-              "{profile.headline}"
-            </p>
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-white leading-tight">
+              {profile.headline}
+            </h2>
+          </div>
+
+          {/* Identity Line */}
+          <div className="flex items-center gap-3 text-zinc-300 font-medium">
+            <UserIcon size={20} className="text-zinc-500" />
+            <span>{profile.ethnicity || 'Not Specified'}, {profile.height || 'Not Specified'}, {profile.position || 'Not Specified'}</span>
           </div>
         </div>
 
         {/* Grey Bar at the Bottom */}
-        <div className="mt-8 px-4">
-          <div className="bg-[#2a2a2a] rounded-2xl overflow-hidden flex items-stretch border border-white/5">
-            <div className="flex-1 flex items-center gap-3 px-6 py-4 border-r border-white/5">
+        <div className="mt-10 px-4">
+          <div className="bg-[#2a2a2a] rounded-xl overflow-hidden flex items-stretch border border-white/5">
+            <div className="flex-1 flex items-center gap-3 px-4 py-3 border-r border-white/5 hover:bg-white/5 transition-colors cursor-pointer">
+              <ArrowUpRight size={20} className="text-zinc-400" />
+              <span className="text-sm font-bold tracking-wide text-zinc-100 uppercase">{profile.position || 'Not Specified'}</span>
+            </div>
+            <div className="flex-[1.5] flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors cursor-pointer">
               <Ruler size={20} className="text-zinc-400" />
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-zinc-100">{profile.height}</span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Height</span>
-              </div>
-            </div>
-            <div className="flex-1 flex items-center gap-3 px-6 py-4 border-r border-white/5">
-              <WeightIcon size={20} className="text-zinc-400" />
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-zinc-100">{profile.weight}</span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Weight</span>
-              </div>
-            </div>
-            <div className="flex-1 flex items-center gap-3 px-6 py-4">
-              <UserIcon size={20} className="text-zinc-400" />
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-zinc-100">{profile.bodyType}</span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Body</span>
-              </div>
+              <span className="text-sm font-bold tracking-wide text-zinc-100">
+                {profile.height || 'N/A'} | {profile.weight || 'N/A'} | {profile.bodyType || 'N/A'}
+              </span>
             </div>
           </div>
         </div>
@@ -1492,8 +1378,7 @@ const PhotoAlbumModal = ({ onClose, onUnlock, selectedPhotos, setSelectedPhotos 
   selectedPhotos: number[],
   setSelectedPhotos: React.Dispatch<React.SetStateAction<number[]>>
 }) => {
-  const { user } = useAuth();
-  const privatePhotos = user?.photos?.filter(p => p.isLocked) || [];
+  const photos = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   const togglePhoto = (id: number) => {
     setSelectedPhotos(prev => 
@@ -1520,41 +1405,28 @@ const PhotoAlbumModal = ({ onClose, onUnlock, selectedPhotos, setSelectedPhotos 
         </button>
       </header>
       <div className="flex-1 overflow-y-auto p-4 grid grid-cols-3 gap-2 bg-zinc-950">
-        {privatePhotos.length === 0 ? (
-          <div className="col-span-3 flex flex-col items-center justify-center py-20 text-zinc-500">
-            <ImageIcon size={48} className="mb-4 opacity-20" />
-            <p className="text-sm font-bold uppercase tracking-widest">No private photos</p>
-            <p className="text-xs mt-1">Add private photos in your profile to unlock them here.</p>
-          </div>
-        ) : (
-          privatePhotos.map(photo => (
-            <div 
-              key={photo.id} 
-              onClick={() => togglePhoto(photo.id)}
-              className="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group"
-            >
-              <img 
-                src={photo.thumbData || photo.photoData} 
-                alt="" 
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                referrerPolicy="no-referrer"
-              />
-              <div className={cn(
-                "absolute inset-0 flex items-center justify-center transition-all",
-                selectedPhotos.includes(photo.id) ? "bg-yellow-500/40" : "bg-black/40 group-hover:bg-black/20"
-              )}>
-                {selectedPhotos.includes(photo.id) && (
-                  <div className="bg-yellow-500 text-black p-2 rounded-full shadow-lg animate-in zoom-in duration-300">
-                    <Star size={24} fill="currentColor" />
-                  </div>
-                )}
-                {!selectedPhotos.includes(photo.id) && (
-                  <Lock size={24} className="text-white/40 group-hover:text-white/80 transition-colors" />
-                )}
-              </div>
+        {photos.map(id => (
+          <div 
+            key={id} 
+            onClick={() => togglePhoto(id)}
+            className="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group"
+          >
+            <img src={`https://picsum.photos/seed/photo${id}/300/300`} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+            <div className={cn(
+              "absolute inset-0 flex items-center justify-center transition-all",
+              selectedPhotos.includes(id) ? "bg-yellow-500/40" : "bg-black/40 group-hover:bg-black/20"
+            )}>
+              {selectedPhotos.includes(id) && (
+                <div className="bg-yellow-500 text-black p-2 rounded-full shadow-lg animate-in zoom-in duration-300">
+                  <Star size={24} fill="currentColor" />
+                </div>
+              )}
+              {!selectedPhotos.includes(id) && (
+                <Lock size={24} className="text-white/40 group-hover:text-white/80 transition-colors" />
+              )}
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </div>
     </motion.div>
   );
@@ -1788,7 +1660,7 @@ const BottomNav = ({ active }: { active: 'nearby' | 'messages' | 'profile' }) =>
         )}
       </button>
       <button 
-        onClick={() => navigate('/edit-profile')}
+        onClick={() => navigate(`/profile/${user?.id}`)}
         className={cn("flex flex-col items-center gap-1 transition-all duration-300", active === 'profile' ? "text-yellow-500 scale-110" : "text-zinc-500 hover:text-white")}
       >
         {user?.profilePhotoThumbUrl || user?.photoUrl ? (
@@ -1812,7 +1684,7 @@ const ProfileCard: React.FC<{
 }) => {
   const photos = u.photos && u.photos.length > 0 
     ? u.photos.map(p => p.photoData) 
-    : [u.profilePhotoThumbUrl || u.profilePhotoUrl || u.photoUrl || `https://picsum.photos/seed/user${u.id}/800/1000`];
+    : [u.profilePhotoUrl || u.photoUrl || `https://picsum.photos/seed/user${u.id}/800/1000`];
 
   return (
     <motion.div 
@@ -1823,7 +1695,7 @@ const ProfileCard: React.FC<{
     >
       {/* Image */}
       <img 
-        src={u.profilePhotoThumbUrl || photos[0]} 
+        src={photos[0]} 
         alt={u.displayName}
         className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         referrerPolicy="no-referrer"
@@ -1841,10 +1713,7 @@ const ProfileCard: React.FC<{
               isOnline(u.lastSeen) ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" : "bg-zinc-500"
             )} />
             <span className="text-[11px] font-black tracking-tight text-white truncate uppercase">
-              {[
-                u.showDistance ? u.distance : null,
-                u.showAge ? (u.age || '??') : null
-              ].filter(Boolean).join(' | ')}
+              {u.distance} | {u.age || '??'}
             </span>
           </div>
         </div>
@@ -1967,9 +1836,9 @@ const FullProfileOverlay = ({
         </div>
 
         {/* Top Header with Logo */}
-        <div className="relative z-20 w-full p-6 pt-12 flex items-center justify-between bg-black/20 backdrop-blur-md border-b border-white/10">
+        <div className="relative z-20 w-full p-6 pt-12 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent">
           <div className="flex-1" />
-          <div className="text-2xl font-black text-white tracking-tighter italic">hia</div>
+          <div className="text-2xl font-black text-white/90 tracking-tighter italic">hia</div>
           <div className="flex-1 flex justify-end">
             <button 
               onClick={onClose}
@@ -1997,32 +1866,55 @@ const FullProfileOverlay = ({
             </div>
           )}
 
+          {/* Age and Online Status */}
+          <div className="px-2 space-y-1">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl filter drop-shadow-lg">✌️</span>
+              <h1 className="text-4xl font-bold text-white drop-shadow-lg">
+                {profile.age || '??'}
+              </h1>
+            </div>
+            <div className="text-white/90 text-sm font-medium drop-shadow-md">
+              Online {formatLastSeen(profile.lastSeen) || 'Now'} <span className="mx-1 opacity-50">|</span> <Send size={12} className="inline rotate-45 mr-1" /> {profile.distance} away
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             {/* Horizontal Info Bar */}
-            <div className="flex-1 bg-zinc-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-3">
-                  <h1 className="text-4xl font-bold text-white drop-shadow-lg">
-                    {profile.age || '??'}
-                  </h1>
-                  <div className="flex items-center gap-2 text-white/90 text-[13px] font-bold">
-                    <ArrowUpRight size={16} className="text-white" />
-                    <span>{profile.position || 'Vers Top'}</span>
-                  </div>
-                </div>
-                <div className="text-white/90 text-sm font-medium drop-shadow-md">
-                  Online {formatLastSeen(profile.lastSeen) || 'Now'} <span className="mx-1 opacity-50">|</span> <Send size={12} className="inline rotate-45 mr-1" /> {profile.distance} away
-                </div>
+            <div className="flex-1 bg-zinc-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-2xl">
+              <div className="flex items-center gap-2 text-white/90 text-[13px] font-bold">
+                <ArrowUpRight size={16} className="text-white" />
+                <span>{profile.position || 'Vers Top'}</span>
               </div>
 
-              <div className="flex items-center gap-2 text-white/90 text-[13px] font-bold pt-1">
+              <div className="w-px h-3 bg-white/10 mx-1" />
+
+              <div className="flex items-center gap-2 text-white/90 text-[13px] font-bold">
                 <Ruler size={16} className="text-white" />
-                <span>{profile.height || "5'10\""} | {profile.weight || "160 lb"}</span>
+                <span>{profile.height || "5'10\""} | {profile.weight || "160 lb"} | {profile.bodyType || "Toned"}</span>
               </div>
             </div>
 
-            {/* Floating Chat Button */}
+            {/* Floating Chat Button & Quick Actions */}
             <div className="flex flex-col items-center gap-3 shrink-0">
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={handleFavorite}
+                  className={cn(
+                    "w-10 h-10 rounded-full backdrop-blur-xl border border-white/10 flex items-center justify-center transition-all shadow-lg",
+                    isFavorited ? "bg-yellow-500 text-black" : "bg-white/5 text-white hover:bg-white/10"
+                  )}
+                >
+                  <Heart size={18} fill={isFavorited ? "currentColor" : "none"} />
+                </button>
+                <button 
+                  onClick={handleBlock}
+                  className="w-10 h-10 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white/60 hover:text-red-500 hover:bg-white/10 transition-all shadow-lg"
+                >
+                  <Ban size={18} />
+                </button>
+              </div>
+
               <button 
                 onClick={() => {
                   if (window.innerWidth >= 1280) { // xl breakpoint
@@ -2042,7 +1934,27 @@ const FullProfileOverlay = ({
           </div>
 
           {/* Secondary Actions Row */}
-          <div className="flex items-center justify-end px-2 pt-2">
+          <div className="flex items-center justify-between px-2 pt-2">
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={handleFavorite}
+                className={cn(
+                  "flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] transition-all",
+                  isFavorited ? "text-yellow-500" : "text-white/40 hover:text-white"
+                )}
+              >
+                <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
+                Like
+              </button>
+              <button 
+                onClick={handleBlock}
+                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-white/40 hover:text-red-500 transition-all"
+              >
+                <Ban size={16} />
+                Block
+              </button>
+            </div>
+            
             <button className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] text-white/20 hover:text-white/50 transition-all">
               <Lock size={10} />
               Private Gallery
@@ -2205,8 +2117,8 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const options = {
       enableHighAccuracy: true,
-      timeout: 30000,
-      maximumAge: 30000
+      timeout: 15000,
+      maximumAge: 0
     };
 
     return new Promise<void>((resolve, reject) => {
@@ -2254,8 +2166,8 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if ("geolocation" in navigator) {
       const options = {
         enableHighAccuracy: true,
-        timeout: 30000,
-        maximumAge: 30000
+        timeout: 15000,
+        maximumAge: 0
       };
 
       let lastLat = user.latitude;
@@ -2279,10 +2191,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
         }
       }, (err) => {
-        // Only log non-timeout errors
-        if (err.code !== 3) {
-          console.error('Geolocation watch error:', err.message);
-        }
+        console.error('Geolocation watch error:', err.message);
         // Don't set global error for watch as it might be transient
       }, options);
 
@@ -2307,10 +2216,8 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           
           // Initial unread count fetch
           const convs = await api.get('/api/conversations');
-          if (Array.isArray(convs)) {
-            const unread = convs.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0);
-            setUnreadCount(unread);
-          }
+          const unread = convs.filter((c: any) => c.unread).length;
+          setUnreadCount(unread);
         } catch (err) {
           console.error('Auth check failed:', err);
           localStorage.removeItem('hia_token');
@@ -2329,8 +2236,9 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(prev => prev ? { ...prev, lastSeen: new Date() } : null);
         
         try {
-          const data = await api.get('/api/conversations/unread-count');
-          setUnreadCount(data.unreadCount || 0);
+          const convs = await api.get('/api/conversations');
+          const unread = convs.filter((c: any) => c.unread).length;
+          setUnreadCount(unread);
         } catch (err) {
           console.error('Failed to fetch unread count in interval:', err);
         }
@@ -2370,7 +2278,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, locationError, updateLocation, retryingLocation, login, register, logout, unreadCount, setUnreadCount }}>
+    <AuthContext.Provider value={{ user, loading, locationError, updateLocation, retryingLocation, login, register, logout, unreadCount, setUnreadCount }}>
       {children}
     </AuthContext.Provider>
   );

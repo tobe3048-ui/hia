@@ -25,9 +25,7 @@ export const users = pgTable("users", {
   showAge: boolean("show_age").default(true),
   neighborhood: varchar("neighborhood", { length: 100 }),
   showNeighborhood: boolean("show_neighborhood").default(true),
-  showDistance: boolean("show_distance").default(true),
   meetAt: varchar("meet_at", { length: 200 }),
-  bio: text("bio"),
   createdAt: timestamp("created_at").default(sql`NOW()`),
 });
 
@@ -35,7 +33,6 @@ export const photos = pgTable("photos", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
   photoData: text("photo_data").notNull(),
-  thumbData: text("thumb_data"),
   isLocked: boolean("is_locked").default(false),
   displayOrder: integer("display_order").default(0),
   createdAt: timestamp("created_at").default(sql`NOW()`),

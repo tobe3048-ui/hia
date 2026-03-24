@@ -9,7 +9,7 @@ import sharp from "sharp";
 
 import { db } from "./src/db/index";
 import { users, messages, conversations, photos, photoUnlocks, favorites, blocks } from "./src/db/schema";
-import { eq, or, and, sql, ne, notInArray, asc } from "drizzle-orm";
+import { eq, or, and, sql, ne, notInArray } from "drizzle-orm";
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -147,11 +147,10 @@ async function startServer() {
       
       const userPhotos = await db.select().from(photos)
         .where(eq(photos.userId, req.user.id))
-        .orderBy(asc(photos.displayOrder));
+        .orderBy(sql`${photos.displayOrder} ASC`);
 
       res.json({ ...user[0], photos: userPhotos });
     } catch (error: any) {
-      console.error("Auth me error:", error);
       res.status(500).json({ error: "Failed to fetch user", details: error.message });
     }
   });
@@ -246,7 +245,7 @@ async function startServer() {
       // Fetch photos
       const userPhotos = await db.select().from(photos)
         .where(eq(photos.userId, userId))
-        .orderBy(asc(photos.displayOrder));
+        .orderBy(sql`${photos.displayOrder} ASC`);
 
       // Check if photos are unlocked for the current user
       const unlockStatus = await db.select().from(photoUnlocks)
@@ -297,7 +296,6 @@ async function startServer() {
         isFavorited
       });
     } catch (error: any) {
-      console.error("Fetch user profile error:", error);
       res.status(500).json({ error: "Failed to fetch user", details: error.message });
     }
   });
@@ -371,78 +369,14 @@ async function startServer() {
 
   apiRouter.post("/users/me", authenticateToken, async (req: any, res) => {
     try {
-      const { 
-        id, email, password, photos: photosInput, distance, distanceValue, lastSeen, isOnline, createdAt,
-        isUnlocked, isMyGalleryUnlockedForThem, isFavorited, lastOnline, headline,
-        role, specificRole, ...rawUpdateData 
-      } = req.body;
-
-      // Filter updateData to only include valid columns
-      const validColumns = [
-        'displayName', 'age', 'lookingFor', 'latitude', 'longitude', 'dateOfBirth',
-        'height', 'weight', 'bodyType', 'ethnicity', 'relationshipStatus', 'position',
-        'isIncognito', 'profilePhotoUrl', 'profilePhotoThumbUrl', 'showAge',
-        'neighborhood', 'showNeighborhood', 'showDistance', 'meetAt', 'bio'
-      ];
-      
-      const updateData: any = {};
-      for (const key of validColumns) {
-        if (rawUpdateData[key] !== undefined) {
-          updateData[key] = rawUpdateData[key];
-        }
-      }
-      
-      let finalUser;
-      if (Object.keys(updateData).length > 0) {
-        const updatedUser = await db.update(users)
-          .set(updateData)
-          .where(eq(users.id, req.user.id))
-          .returning();
-        finalUser = updatedUser[0];
-      } else {
-        const currentUser = await db.select().from(users).where(eq(users.id, req.user.id));
-        finalUser = currentUser[0];
-      }
-      
-      const userPhotos = await db.select().from(photos)
-        .where(eq(photos.userId, req.user.id))
-        .orderBy(asc(photos.displayOrder));
-
-      if (!finalUser) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      res.json({ ...finalUser, photos: userPhotos });
+      const { id, email, password, ...updateData } = req.body;
+      const updatedUser = await db.update(users)
+        .set(updateData)
+        .where(eq(users.id, req.user.id))
+        .returning();
+      res.json(updatedUser[0]);
     } catch (error: any) {
-      console.error("Profile update error:", error);
       res.status(500).json({ error: "Failed to update profile", details: error.message });
-    }
-  });
-
-  apiRouter.get("/conversations/unread-count", authenticateToken, async (req: any, res) => {
-    try {
-      const userConversations = await db.select({ id: conversations.id })
-        .from(conversations)
-        .where(or(
-          eq(conversations.user1Id, req.user.id),
-          eq(conversations.user2Id, req.user.id)
-        ));
-
-      let totalUnread = 0;
-      await Promise.all(userConversations.map(async (conv) => {
-        const unreadCount = await db.select({ count: sql`count(*)` })
-          .from(messages)
-          .where(and(
-            eq(messages.conversationId, conv.id),
-            eq(messages.isRead, false),
-            ne(messages.senderId, req.user.id)
-          ));
-        totalUnread += parseInt((unreadCount[0] as any).count) || 0;
-      }));
-
-      res.json({ unreadCount: totalUnread });
-    } catch (error: any) {
-      res.status(500).json({ error: "Failed to fetch unread count", details: error.message });
     }
   });
 
@@ -568,11 +502,10 @@ async function startServer() {
 
   apiRouter.post("/photos", authenticateToken, async (req: any, res) => {
     try {
-      const { photoData, thumbData, isLocked, displayOrder } = req.body;
+      const { photoData, isLocked, displayOrder } = req.body;
       const [newPhoto] = await db.insert(photos).values({
         userId: req.user.id,
         photoData,
-        thumbData,
         isLocked: isLocked || false,
         displayOrder: displayOrder || 0
       }).returning();
